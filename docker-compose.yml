@@ -1,0 +1,113 @@
+services:
+  # PostgreSQL database service
+  postgresql:
+    container_name: ms_pg_sql
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres            # Default PostgreSQL user
+      POSTGRES_PASSWORD: mypassword      # Password for the PostgreSQL user
+      PGDATA: /var/lib/postgresql/data   # Directory where PostgreSQL will store data
+    volumes:
+      - postgres:/data/postgres          # Persistent volume for PostgreSQL data
+    ports:
+      - 5431:5431                        # Maps the container's port 5431 to the host's port 5431
+    networks:
+      - microservices-net                # Connects the service to the microservices network
+    restart: unless-stopped              # Automatically restart the container unless it is stopped manually
+
+  # pgAdmin service for managing PostgreSQL via a web interface
+  pgadmin:
+    container_name: ms_pgadmin
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org} # Default email for pgAdmin login
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}          # Default password for pgAdmin login
+      PGADMIN_CONFIG_SERVER_MODE: 'False'                                   # Disables multi-user mode in pgAdmin
+    volumes:
+      - pgadmin:/var/lib/pgadmin                                             # Persistent volume for pgAdmin data
+    ports:
+      - 5050:80                                                              # Maps port 80 in the container to port 5050 on the host
+    networks:
+      - microservices-net                                                    # Connects pgAdmin to the microservices network
+    restart: unless-stopped                                                  # Restart policy
+
+  # MongoDB database service
+#  mongodb:
+#    image: mongo
+#    container_name: mongo_db
+#    ports:
+#      - 27018:27018                       # Maps MongoDB's default port 27017 to the host's port 27017
+#    volumes:
+#      - mongo:/data                       # Persistent volume for MongoDB data
+#    environment:
+#      - MONGO_INITDB_ROOT_USERNAME=ganesh  # MongoDB root username
+#      - MONGO_INITDB_ROOT_PASSWORD=mypassword # MongoDB root password
+#
+#  # Mongo Express service for managing MongoDB via a web interface
+#  mongo-express:
+#    image: mongo-express
+#    container_name: mongo_express
+#    restart: always                       # Always restart the container if it stops
+#    ports:
+#      - 8081:8081                         # Maps port 8081 in the container to port 8081 on the host
+#    environment:
+#      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin    # Admin username for Mongo Express
+#      - ME_CONFIG_MONGODB_ADMINPASSWORD=pass # Admin password for Mongo Express
+#      - ME_CONFIG_MONGODB_SERVER=mongodb          # MongoDB server hostname (linked to the MongoDB service)
+
+  # Zookeeper service required for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_SERVER_ID: 1             # Zookeeper server ID
+      ZOOKEEPER_CLIENT_PORT: 2181         # Port Zookeeper listens to
+      ZOOKEEPER_TICK_TIME: 2000           # Zookeeper tick time
+    ports:
+      - 22181:2181                       # Maps Zookeeper's port 2181 to port 22181 on the host
+    networks:
+      - microservices-net                # Connects Zookeeper to the microservices network
+
+  # Kafka service for message brokering
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: ms_kafka
+    ports:
+      - 9092:9092                       # Maps Kafka's port 9092 to port 9092 on the host
+    depends_on:
+      - zookeeper                       # Ensures Zookeeper starts before Kafka
+    environment:
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Kafka replication factor for offsets
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1 # Replication factor for transaction state logs
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1            # Minimum in-sync replicas for state logs
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181           # Zookeeper connection string for Kafka
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT # Security protocol map
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092 # Kafka advertised listeners
+    networks:
+      - microservices-net                           # Connects Kafka to the microservices network
+
+  # MailDev service for email testing
+  mail-dev:
+    container_name: ms-mail-dev
+    image: maildev/maildev
+    ports:
+      - 1080:1080                       # Maps MailDev web interface port to host
+      - 1025:1025                       # Maps MailDev SMTP port to host
+
+  # Zipkin service for distributed tracing
+  zipkin:
+    container_name: zipkin
+    image: openzipkin/zipkin
+    ports:
+      - 9411:9411                      # Maps Zipkin's port 9411 to port 9411 on the host
+    networks:
+      - microservices-net              # Connects Zipkin to the microservices network
+
+networks:
+  microservices-net:
+    driver: bridge                      # Defines the microservices network as a bridge network
+
+volumes:
+  postgres:                             # Volume to persist PostgreSQL data
+  pgadmin:                              # Volume to persist pgAdmin data
+  mongo:                                # Volume to persist MongoDB data
